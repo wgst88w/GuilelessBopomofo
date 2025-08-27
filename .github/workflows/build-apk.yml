@@ -32,6 +32,11 @@ jobs:
         echo "export PATH=$HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin:$PATH" >> $GITHUB_ENV
         echo "export PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
 
+    - name: Install CMake
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake make gcc g++
+
     - name: Build APK
       run: |
         ./gradlew --stop
