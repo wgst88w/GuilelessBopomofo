@@ -23,16 +23,18 @@ android {
         versionName = "3.6.0"
 
         ndk {
-            abiFilters += listOf("x86")  // 只編譯 x86
+            abiFilters += listOf("x86")
         }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
         externalNativeBuild {
             cmake {
                 cFlags("-Wno-unused-function", "-Wno-unused-but-set-variable")
                 cppFlags += listOf("")
             }
         }
+
         vectorDrawables {
             useSupportLibrary = true
         }
@@ -80,8 +82,8 @@ android {
     }
 
     compileOptions {
-        targetCompatibility = JavaVersion.VERSION_17
         sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlin {
@@ -92,103 +94,82 @@ android {
 
     ndkVersion = "28.1.13356709"
 
-    val chewingLibraryPath: String = if (System.getenv("CI") != null) {
-        // 在 Docker / CI build 時用容器內路徑
+    val chewingLibraryPath = if (System.getenv("CI") != null) {
         "/workspace/project/app/src/main/cpp/libs/libchewing"
     } else {
-        // 本地開發使用相對路徑
-        "${rootDir}/app/src/main/cpp/libs/libchewing"
+        "$rootDir/app/src/main/cpp/libs/libchewing"
     }
 
-    tasks.register<Exec>("prepareChewing") {
+    val chewingBuildDir = "$chewingLibraryPath/build"
+    val chewingAssetsDir = if (System.getenv("CI") != null) {
+        "/workspace/project/app/src/main/assets"
+    } else {
+        "$rootDir/app/src/main/assets"
+    }
+
+    val chewingDataFiles = listOf("tsi.dat", "word.dat", "swkb.dat", "symbols.dat")
+
+    val prepareChewing = tasks.register<Exec>("prepareChewing") {
         workingDir(chewingLibraryPath)
         commandLine(
             "cmake",
-            "-B",
-            "build/",
+            "-B", "build/",
             "-DBUILD_INFO=false",
             "-DBUILD_TESTING=false",
             "-DWITH_SQLITE3=false",
             "-DCMAKE_BUILD_TYPE=Release"
         )
+        outputs.dir(chewingBuildDir)
+        outputs.upToDateWhen { file(chewingBuildDir).exists() }
     }
 
-    val chewingDataFiles =
-        listOf<String>("tsi.dat", "word.dat", "swkb.dat", "symbols.dat")
-
-    tasks.register<Exec>("buildChewingData") {
-        dependsOn("prepareChewing")
-        workingDir("$chewingLibraryPath/build")
+    val buildChewingData = tasks.register<Exec>("buildChewingData") {
+        dependsOn(prepareChewing)
+        workingDir(chewingBuildDir)
         commandLine("make", "dict_chewing", "misc")
+        outputs.files(chewingDataFiles.map { "$chewingAssetsDir/$it" })
+        outputs.upToDateWhen {
+            chewingDataFiles.all { file("$chewingAssetsDir/$it").exists() }
+        }
     }
 
     tasks.register<Copy>("copyChewingDataFiles") {
-        dependsOn("buildChewingData")
-        from("$chewingLibraryPath/build/data/dict/chewing") {
-            include("tsi.dat")
-            include("word.dat")
+        dependsOn(buildChewingData)
+        from("$chewingBuildDir/data/dict/chewing") {
+            include("tsi.dat", "word.dat")
         }
-        from("$chewingLibraryPath/build/data/misc") {
-            include("swkb.dat")
-            include("symbols.dat")
+        from("$chewingBuildDir/data/misc") {
+            include("swkb.dat", "symbols.dat")
         }
-        into(
-            if (System.getenv("CI") != null)
-                "/workspace/project/app/src/main/assets"
-            else
-                "$rootDir/app/src/main/assets"
-        )
+        into(chewingAssetsDir)
     }
 
-    tasks.register<Exec>("installRustup") {
+    val installRustup = tasks.register<Exec>("installRustup") {
         onlyIf {
             try {
-                val result = exec {
-                    isIgnoreExitValue = true
-                    commandLine("rustup", "-V")
-                }
-                result.exitValue != 0
-            } catch (e: Exception) {
-                return@onlyIf false
-            }
+                exec { commandLine("rustup", "-V"); isIgnoreExitValue = true }.exitValue != 0
+            } catch (e: Exception) { true }
         }
-        commandLine(
-            "curl", "--proto", "'=https'", "--tlsv1.2", "-sSf", "https://sh.rustup.rs", "|", "sh", "-s", "--", "--default-toolchain",
-            "none"
-        )
+        commandLine("sh", "-c", "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- --default-toolchain none")
     }
 
-    tasks.register<Exec>("installSpecifiedRustToolchain") {
-        dependsOn("installRustup")
+    val installSpecifiedRustToolchain = tasks.register<Exec>("installSpecifiedRustToolchain") {
+        dependsOn(installRustup)
         onlyIf {
             try {
-                val result = exec {
-                    isIgnoreExitValue = true
-                    commandLine("rustup", "-V")
-                }
-                result.exitValue != 0
-            } catch (e: Exception) {
-                return@onlyIf false
-            }
+                exec { commandLine("rustup", "-V"); isIgnoreExitValue = true }.exitValue != 0
+            } catch (e: Exception) { true }
         }
         commandLine("rustup", "install")
     }
 
     tasks.preBuild {
-        dependsOn(
-            "installSpecifiedRustToolchain",
-            "copyChewingDataFiles"
-        )
+        dependsOn("copyChewingDataFiles")
     }
 
     tasks.register<Delete>("cleanChewingDataFiles") {
-        for (chewingDataFile in chewingDataFiles) {
-            file(
-                if (System.getenv("CI") != null)
-                    "/workspace/project/app/src/main/assets/$chewingDataFile"
-                else
-                    "$rootDir/app/src/main/assets/$chewingDataFile"
-            ).delete()
+        chewingDataFiles.forEach {
+            delete("$chewingAssetsDir/$it")
         }
     }
 
@@ -201,16 +182,11 @@ android {
 
     tasks.register<Delete>("deleteChewingBuildDirectory") {
         onlyIf { file("$chewingLibraryPath/build/Makefile").exists() }
-        delete("$chewingLibraryPath/build")
+        delete(chewingBuildDir)
     }
 
     tasks.register<Delete>("deleteAppDotCxxDirectory") {
-        delete(
-            if (System.getenv("CI") != null)
-                "/workspace/project/app/.cxx"
-            else
-                "$rootDir/app/.cxx"
-        )
+        delete(if (System.getenv("CI") != null) "/workspace/project/app/.cxx" else "$rootDir/app/.cxx")
     }
 
     tasks.clean {
