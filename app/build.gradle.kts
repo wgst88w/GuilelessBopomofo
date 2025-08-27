@@ -22,6 +22,10 @@ android {
         versionCode = 184
         versionName = "3.6.0"
 
+        ndk {
+            abiFilters += listOf("x86")  // 只編譯 x86
+        }
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
@@ -62,6 +66,10 @@ android {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.24.0+"
+            arguments += listOf(
+                "-DANDROID_ABI=x86",
+                "-DANDROID_PLATFORM=android-21"
+            )
         }
     }
 
