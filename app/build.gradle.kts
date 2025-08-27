@@ -17,7 +17,7 @@ android {
 
     defaultConfig {
         applicationId = "org.ghostsinthelab.apps.guilelessbopomofo"
-        minSdk = 23
+        minSdk = 21
         targetSdk = 36
         versionCode = 184
         versionName = "3.6.0"
@@ -84,11 +84,16 @@ android {
 
     ndkVersion = "28.1.13356709"
 
-    val chewingLibraryPath: String = "${rootDir}/app/src/main/cpp/libs/libchewing"
+    val chewingLibraryPath: String = if (System.getenv("CI") != null) {
+        // 在 Docker / CI build 時用容器內路徑
+        "/workspace/project/app/src/main/cpp/libs/libchewing"
+    } else {
+        // 本地開發使用相對路徑
+        "${rootDir}/app/src/main/cpp/libs/libchewing"
+    }
 
     tasks.register<Exec>("prepareChewing") {
         workingDir(chewingLibraryPath)
-        // This is just for task 'buildChewingData', other definitions are in cpp/CMakeLists.txt
         commandLine(
             "cmake",
             "-B",
@@ -119,7 +124,12 @@ android {
             include("swkb.dat")
             include("symbols.dat")
         }
-        into("$rootDir/app/src/main/assets")
+        into(
+            if (System.getenv("CI") != null)
+                "/workspace/project/app/src/main/assets"
+            else
+                "$rootDir/app/src/main/assets"
+        )
     }
 
     tasks.register<Exec>("installRustup") {
@@ -153,7 +163,6 @@ android {
                 return@onlyIf false
             }
         }
-        // follows rust-toolchain.toml
         commandLine("rustup", "install")
     }
 
@@ -166,7 +175,12 @@ android {
 
     tasks.register<Delete>("cleanChewingDataFiles") {
         for (chewingDataFile in chewingDataFiles) {
-            file("$rootDir/app/src/main/assets/$chewingDataFile").delete()
+            file(
+                if (System.getenv("CI") != null)
+                    "/workspace/project/app/src/main/assets/$chewingDataFile"
+                else
+                    "$rootDir/app/src/main/assets/$chewingDataFile"
+            ).delete()
         }
     }
 
@@ -183,7 +197,12 @@ android {
     }
 
     tasks.register<Delete>("deleteAppDotCxxDirectory") {
-        delete("$rootDir/app/.cxx")
+        delete(
+            if (System.getenv("CI") != null)
+                "/workspace/project/app/.cxx"
+            else
+                "$rootDir/app/.cxx"
+        )
     }
 
     tasks.clean {
