@@ -91,7 +91,7 @@ android {
 val chewingLibraryPath: String = "src/main/cpp/libs/libchewing"
 
 tasks.register<Exec>("prepareChewing") {
-    workingDir(chewingLibraryPath)
+    workingDir("$rootDir/app/src/main/cpp")
     environment("RUST_TOOLCHAIN", "1.88.0")
     commandLine(
         "/usr/bin/cmake",
