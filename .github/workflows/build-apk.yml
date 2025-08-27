@@ -11,10 +11,8 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repo with submodules
-      uses: actions/checkout@v4
-      with:
-        submodules: true
+    - name: Checkout repo
+      uses: actions/checkout@v3
 
     - name: Set up JDK 17
       uses: actions/setup-java@v3
@@ -25,7 +23,7 @@ jobs:
     - name: Install Android SDK & NDK
       run: |
         sudo apt-get update
-        sudo apt-get install -y unzip wget
+        sudo apt-get install -y unzip wget git
         mkdir -p $HOME/android-sdk/cmdline-tools/latest
         wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
         unzip cmdline-tools.zip -d $HOME/android-sdk/cmdline-tools/latest
@@ -34,16 +32,21 @@ jobs:
         echo "export PATH=$HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin:$PATH" >> $GITHUB_ENV
         echo "export PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
 
-    - name: Install CMake
+    - name: Install CMake and build tools
       run: |
         sudo apt-get update
         sudo apt-get install -y cmake make gcc g++
+
+    - name: Clone libchewing
+      run: |
+        rm -rf app/src/main/cpp/libs/libchewing
+        git clone https://github.com/hiroshiyui/libchewing.git app/src/main/cpp/libs/libchewing
 
     - name: Build APK
       run: |
         ./gradlew --stop
         ./gradlew clean
-        ./gradlew :app:assembleRelease
+        ./gradlew :app:assembleRelease --warning-mode all
 
     - name: List generated APK files
       run: |
