@@ -1,2 +1,19 @@
-include ':app'
-rootProject.name = "Guileless Bopomofo"
+pluginManagement {
+    repositories {
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        google()
+        mavenCentral()
+        maven { url = uri("https://jitpack.io") }
+    }
+}
+
+rootProject.name = "GuilelessBopomofo"
+include(":app")
