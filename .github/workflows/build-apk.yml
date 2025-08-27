@@ -33,7 +33,9 @@ jobs:
         echo "export PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
 
     - name: Build APK
-      run: ./gradlew :app:assembleRelease --stacktrace --info --debug
+      run: ./gradlew --stop
+      run: ./gradlew clean
+      run: ./gradlew build --stacktrace --info
 
     - name: Upload APK
       uses: actions/upload-artifact@v4
