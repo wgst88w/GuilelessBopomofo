@@ -33,9 +33,10 @@ jobs:
         echo "export PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
 
     - name: Build APK
-      run: ./gradlew --stop
-           ./gradlew clean
-           ./gradlew :app:assembleRelease
+      run: |
+        ./gradlew --stop
+        ./gradlew clean
+        ./gradlew :app:assembleRelease
 
     - name: List generated APK files
       run: |
