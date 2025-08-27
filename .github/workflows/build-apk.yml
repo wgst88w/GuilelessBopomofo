@@ -35,7 +35,7 @@ jobs:
     - name: Build APK
       run: ./gradlew --stop
            ./gradlew clean
-           ./gradlew build --stacktrace --info
+           ./gradlew :app:assembleRelease
 
     - name: List generated APK files
       run: |
