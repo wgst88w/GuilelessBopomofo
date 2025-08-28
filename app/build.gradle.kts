@@ -3,7 +3,6 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("kotlin-parcelize")
     id("com.google.devtools.ksp")
-    // id("kotlin-kapt")
 }
 
 android {
@@ -21,7 +20,6 @@ android {
         targetSdk = 35
         versionCode = 180
         versionName = "3.5.4"
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         externalNativeBuild {
             cmake {
@@ -35,7 +33,6 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-
         setProperty("archivesBaseName", "_v")
     }
 
@@ -58,10 +55,9 @@ android {
         }
     }
 
-    // ✅ 移到這裡（和 buildTypes 平行）
     externalNativeBuild {
         cmake {
-            path = file("src/main/cpp/CMakeLists.txt") // ✅ Kotlin DSL 要用 =
+            path = file("src/main/cpp/CMakeLists.txt")
             version = "3.24.0+"
         }
     }
@@ -87,11 +83,10 @@ android {
 }
 
 // ---------- Rust & chewing 自定義 tasks ----------
-
 val chewingLibraryPath: String = "src/main/cpp/libs/libchewing"
 
 tasks.register<Exec>("prepareChewing") {
-    workingDir("$rootDir/app/src/main/cpp")
+    workingDir("$projectDir/src/main/cpp/libs/libchewing")
     environment("RUST_TOOLCHAIN", "1.88.0")
     commandLine(
         "/usr/bin/cmake",
@@ -109,80 +104,40 @@ val chewingDataFiles = listOf("tsi.dat", "word.dat", "swkb.dat", "symbols.dat")
 tasks.register<Exec>("buildChewingData") {
     dependsOn("prepareChewing")
     workingDir("$projectDir/src/main/cpp/libs/libchewing/build")
-    commandLine("make", "data", "all_static_data")
+    commandLine("cmake", "--build", ".")
 }
 
 tasks.register<Copy>("copyChewingDataFiles") {
     dependsOn("buildChewingData")
-    for (chewingDataFile in chewingDataFiles) {
-        from("/build/data/")
-        into("/app/src/main/assets")
-    }
-}
-
-tasks.register<Exec>("installRustup") {
-    onlyIf {
-        try {
-            val result = exec {
-                isIgnoreExitValue = false
-                standardOutput = System.out
-                errorOutput = System.err
-                commandLine("rustup", "-V")
-            }
-            result.exitValue != 0
-        } catch (e: Exception) {
-            return@onlyIf false
-        }
-    }
-    commandLine(
-        "curl", "--proto", "'=https'", "--tlsv1.2", "-sSf",
-        "https://sh.rustup.rs", "|", "sh", "-s", "--", "--default-toolchain", "none"
-    )
-}
-
-tasks.register<Exec>("installSpecifiedRustToolchain") {
-    dependsOn("installRustup")
-    onlyIf {
-        try {
-            val result = exec {
-                isIgnoreExitValue = true
-                commandLine("rustup", "-V")
-            }
-            result.exitValue != 0
-        } catch (e: Exception) {
-            return@onlyIf false
-        }
-    }
-    commandLine("rustup", "install")
+    from("$chewingLibraryPath/build/data/dict/chewing") { include("tsi.dat", "word.dat") }
+    from("$chewingLibraryPath/build/data/misc") { include("swkb.dat", "symbols.dat") }
+    into("$projectDir/src/main/assets")
 }
 
 tasks.preBuild {
-    dependsOn(
-        "installSpecifiedRustToolchain",
-        "copyChewingDataFiles"
-    )
+    dependsOn("copyChewingDataFiles")
 }
 
 tasks.register<Delete>("cleanChewingDataFiles") {
-    for (chewingDataFile in chewingDataFiles) {
-        file("/app/src/main/assets/").delete()
+    chewingDataFiles.forEach {
+        file("$projectDir/src/main/assets/$it").delete()
     }
 }
 
 tasks.register<Exec>("execMakeClean") {
-    onlyIf { file("/build/Makefile").exists() }
-    workingDir("$projectDir/src/main/cpp/libs/libchewing/build")
+    onlyIf { file("$chewingLibraryPath/build/Makefile").exists() }
+    workingDir("$chewingLibraryPath/build")
     commandLine("make", "clean")
     isIgnoreExitValue = true
 }
 
 tasks.register<Delete>("deleteChewingBuildDirectory") {
-    onlyIf { file("/build/Makefile").exists() }
-    delete("/build")
+    onlyIf { file("$chewingLibraryPath/build").exists() }
+    delete("$chewingLibraryPath/build")
 }
 
 tasks.register<Delete>("deleteAppDotCxxDirectory") {
-    delete("/app/.cxx")
+    delete("$projectDir/.cxx")
 }
 
 tasks.clean {
