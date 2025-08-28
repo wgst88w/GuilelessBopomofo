@@ -14,6 +14,15 @@ jobs:
     - name: Checkout repo
       uses: actions/checkout@v3
 
+    - name: Clone libchewing
+      run: |
+        mkdir -p app/src/main/cpp/libs
+        git clone https://github.com/hiroshiyui/libchewing.git app/src/main/cpp/libs/libchewing
+
+    - name: Patch libchewing CMakeLists
+      run: |
+        sed -i 's|add_subdirectory(data)|install(DIRECTORY data/ DESTINATION share/libchewing/data FILES_MATCHING PATTERN "*")|' app/src/main/cpp/libs/libchewing/CMakeLists.txt
+
     - name: Set up JDK 17
       uses: actions/setup-java@v3
       with:
@@ -36,15 +45,6 @@ jobs:
       run: |
         sudo apt-get update
         sudo apt-get install -y cmake make gcc g++
-
-    - name: Patch libchewing CMakeLists
-      run: |
-        sed -i 's|add_subdirectory(data)|install(DIRECTORY data/ DESTINATION share/libchewing/data FILES_MATCHING PATTERN "*")|' app/src/main/cpp/libs/libchewing/CMakeLists.txt
-
-    - name: Debug patched CMakeLists
-      run: |
-        echo "---- Showing lines 150 to 180 in CMakeLists.txt ----"
-        sed -n '150,180p' app/src/main/cpp/libs/libchewing/CMakeLists.txt
 
     - name: Build APK
       run: |
