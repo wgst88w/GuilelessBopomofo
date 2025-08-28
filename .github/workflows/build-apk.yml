@@ -23,7 +23,7 @@ jobs:
     - name: Install Android SDK & NDK
       run: |
         sudo apt-get update
-        sudo apt-get install -y unzip wget git
+        sudo apt-get install -y unzip wget
         mkdir -p $HOME/android-sdk/cmdline-tools/latest
         wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
         unzip cmdline-tools.zip -d $HOME/android-sdk/cmdline-tools/latest
@@ -32,21 +32,20 @@ jobs:
         echo "export PATH=$HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin:$PATH" >> $GITHUB_ENV
         echo "export PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
 
-    - name: Install CMake and build tools
+    - name: Install CMake
       run: |
         sudo apt-get update
         sudo apt-get install -y cmake make gcc g++
 
-    - name: Clone libchewing
+    - name: Patch libchewing CMakeLists
       run: |
-        rm -rf app/src/main/cpp/libs/libchewing
-        git clone https://github.com/hiroshiyui/libchewing.git app/src/main/cpp/libs/libchewing
+        sed -i 's/add_subdirectory(data)/install(DIRECTORY data\\/ DESTINATION share\\/libchewing\\/data FILES_MATCHING PATTERN "*")/' app/src/main/cpp/libs/libchewing/CMakeLists.txt
 
     - name: Build APK
       run: |
         ./gradlew --stop
         ./gradlew clean
-        ./gradlew :app:assembleRelease --warning-mode all
+        ./gradlew :app:assembleRelease
 
     - name: List generated APK files
       run: |
