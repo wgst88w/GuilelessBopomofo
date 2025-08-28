@@ -1,27 +1,18 @@
-name: Build APK
+name: Android CI
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v3
-
-    - name: Clone libchewing
-      run: |
-        mkdir -p app/src/main/cpp/libs
-        git clone https://github.com/hiroshiyui/libchewing.git app/src/main/cpp/libs/libchewing
-
-    - name: Patch libchewing CMakeLists
-      run: |
-        sed -i 's|add_subdirectory(data)|install(DIRECTORY data/ DESTINATION share/libchewing/data FILES_MATCHING PATTERN "*")|' app/src/main/cpp/libs/libchewing/CMakeLists.txt
+    - name: Checkout
+      uses: actions/checkout@v4
 
     - name: Set up JDK 17
       uses: actions/setup-java@v3
@@ -36,25 +27,58 @@ jobs:
         mkdir -p $HOME/android-sdk/cmdline-tools/latest
         wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
         unzip cmdline-tools.zip -d $HOME/android-sdk/cmdline-tools/latest
-        yes | $HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin/sdkmanager --sdk_root=$HOME/android-sdk "platforms;android-36" "build-tools;36.0.0" "ndk;25.2.9519653"
-        echo "export ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
-        echo "export PATH=$HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin:$PATH" >> $GITHUB_ENV
-        echo "export PATH=$HOME/android-sdk/platform-tools:$PATH" >> $GITHUB_ENV
+        yes | $HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin/sdkmanager --sdk_root=$HOME/android-sdk "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
+        echo "ANDROID_HOME=$HOME/android-sdk" >> $GITHUB_ENV
+        echo "$HOME/android-sdk/cmdline-tools/latest/cmdline-tools/bin" >> $GITHUB_PATH
+        echo "$HOME/android-sdk/platform-tools" >> $GITHUB_PATH
 
-    - name: Install CMake
+    - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y cmake make gcc g++
+        sudo apt-get install -y build-essential cmake ninja-build pkg-config git
 
-    - name: Build APK
+    - name: Cache Gradle
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+
+    - name: Cache chewing build
+      uses: actions/cache@v3
+      with:
+        path: app/src/main/cpp/build
+        key: ${{ runner.os }}-chewing-${{ hashFiles('app/src/main/cpp/libs/libchewing/**') }}
+
+    - name: Clone libchewing
       run: |
-        ./gradlew --stop
-        ./gradlew clean
-        ./gradlew :app:assembleRelease
+        mkdir -p app/src/main/cpp/libs
+        if [ ! -d "app/src/main/cpp/libs/libchewing" ]; then
+          git clone https://github.com/hiroshiyui/libchewing.git app/src/main/cpp/libs/libchewing
+        fi
+
+    - name: Patch libchewing CMakeLists
+      run: |
+        sed -i 's|add_subdirectory(data)|install(DIRECTORY data/ DESTINATION share/libchewing/data FILES_MATCHING PATTERN "*")|' app/src/main/cpp/libs/libchewing/CMakeLists.txt
+
+    - name: Prepare Chewing data files
+      run: |
+        mkdir -p app/src/main/assets
+        cp app/src/main/cpp/libs/libchewing/data/*.dat app/src/main/assets/ || echo "No data files found"
+
+    - name: Build native chewing data (fix make error)
+      working-directory: app/src/main/cpp/build
+      run: |
+        cmake ..
+        cmake --build . --parallel
+
+    - name: Build with Gradle
+      run: ./gradlew assembleRelease --stacktrace
 
     - name: List generated APK files
       run: |
-        echo "Listing all files in app/build/outputs/apk/:"
+        echo "Listing APK files under app/build/outputs/apk/:"
         find app/build/outputs/apk/ -type f
 
     - name: Upload release APKs
